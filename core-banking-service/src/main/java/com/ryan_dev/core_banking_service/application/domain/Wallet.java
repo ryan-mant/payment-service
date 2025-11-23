@@ -102,5 +102,7 @@ public class Wallet {
         this.fullName = fullName;
         this.cpfCnpj = cpfCnpj;
         this.email = email;
+        this.password = password;
+        this.balance = balance;
     }
 }
