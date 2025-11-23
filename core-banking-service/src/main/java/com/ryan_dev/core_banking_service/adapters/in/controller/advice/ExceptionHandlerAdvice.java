@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -70,6 +71,19 @@ public class ExceptionHandlerAdvice {
         problemDetail.setTitle("Unexpected Exception");
 //        problemDetail.setType(URI.create("https://github.com/ryan-mant/payment-service")); IMPLEMENTAR UM LINK COM DOC
         problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ProblemDetail handleConcurrencyException(ObjectOptimisticLockingFailureException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "The transaction failed due to a concurrency conflict. Please try again."
+        );
+
+        problemDetail.setTitle("Version Conflict Exception");
+//        problemDetail.setType(URI.create("https://github.com/ryan-mant/payment-service")); IMPLEMENTAR UM LINK COM DOC
+        problemDetail.setProperty("timestamp", Instant.now());
+
         return problemDetail;
     }
 }
