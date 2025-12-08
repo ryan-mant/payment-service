@@ -20,3 +20,20 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+app:
+  client:
+    authorizer:
+      url: "https://run.mocky.io/v3/533cd5d7-63d3-4488-bf8d-4bb8c751c989"
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      authorizer:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
