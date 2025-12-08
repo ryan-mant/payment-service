@@ -2,6 +2,7 @@ package com.ryan_dev.core_banking_service.application.service;
 
 import com.ryan_dev.core_banking_service.application.domain.Wallet;
 import com.ryan_dev.core_banking_service.application.ports.in.transfer.commands.TransferCommand;
+import com.ryan_dev.core_banking_service.application.ports.out.AuthorizerPort;
 import com.ryan_dev.core_banking_service.application.ports.out.WalletRepositoryPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,10 @@ class TransferUseCaseImplTest {
 
     @Mock
     private WalletRepositoryPort walletRepositoryPort;
+
+    @Mock
+    private AuthorizerPort authorizerPort;
+
 
     @InjectMocks
     private TransferUseCaseImpl transferUseCase;
