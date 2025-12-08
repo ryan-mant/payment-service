@@ -17,5 +17,5 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5672:5672"  # Porta de comunicação
-      - "15672:15672" # Dashboard UI (Login: guest/guest)
+      - "5672:5672"
+      - "15672:15672"
