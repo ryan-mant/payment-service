@@ -50,7 +50,7 @@ class TransferControllerTest {
         @DisplayName("Should return 200 OK when transfer is successful")
         void shouldTransferAmountWhenValidRequest() throws Exception {
             // Arrange
-            var requestDto = new TransferRequestDto(UUID.randomUUID(), UUID.randomUUID(), BigDecimal.TEN);
+            var requestDto = new TransferRequestDto(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), BigDecimal.TEN);
             var commandCaptor = ArgumentCaptor.forClass(TransferCommand.class);
 
             doNothing().when(transferUseCase).performTransfer(any(TransferCommand.class));
@@ -75,7 +75,7 @@ class TransferControllerTest {
         @DisplayName("Should return 400 Bad Request when request is invalid")
         void shouldReturnBadRequestWhenRequestIsInvalid() throws Exception {
             // Arrange
-            var invalidRequest = new TransferRequestDto(UUID.randomUUID(), null, BigDecimal.TEN);
+            var invalidRequest = new TransferRequestDto(UUID.randomUUID(), UUID.randomUUID(), null, BigDecimal.TEN);
 
             // Act
             ResultActions response = mockMvc.perform(post("/api/v1/transfers")
@@ -93,7 +93,7 @@ class TransferControllerTest {
         @DisplayName("Should return 422 Unprocessable Entity when a business rule fails")
         void shouldReturnUnprocessableEntityWhenBusinessRuleFails() throws Exception {
             // Arrange
-            var validRequest = new TransferRequestDto(UUID.randomUUID(), UUID.randomUUID(), BigDecimal.TEN);
+            var validRequest = new TransferRequestDto(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), BigDecimal.TEN);
             var businessException = new BusinessException("INSUFFICIENT_FUNDS", "Insufficient funds to complete the transaction.");
 
             doThrow(businessException).when(transferUseCase).performTransfer(any(TransferCommand.class));
