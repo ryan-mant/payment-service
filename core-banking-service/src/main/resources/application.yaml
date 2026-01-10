@@ -5,9 +5,9 @@ spring:
   application:
     name: core-banking-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/db_core_banking
-    username: postgres
-    password: root@123
+    url: jdbc:postgresql://localhost:5444/db_core_banking
+    username: admin
+    password: password
 
   jpa:
     hibernate:
