@@ -3,6 +3,8 @@ package com.ryan_dev.core_banking_service.application.service;
 import com.ryan_dev.core_banking_service.application.domain.Wallet;
 import com.ryan_dev.core_banking_service.application.ports.in.transfer.commands.TransferCommand;
 import com.ryan_dev.core_banking_service.application.ports.out.AuthorizerPort;
+import com.ryan_dev.core_banking_service.application.ports.out.SendNotificationPort;
+import com.ryan_dev.core_banking_service.application.ports.out.TransferRepositoryPort;
 import com.ryan_dev.core_banking_service.application.ports.out.WalletRepositoryPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,13 @@ class TransferUseCaseImplTest {
     @Mock
     private AuthorizerPort authorizerPort;
 
+    @Mock
+    private TransferRepositoryPort transferRepositoryPort;
+
+    @Mock
+    private SendNotificationPort sendNotificationPort;
+
+
 
     @InjectMocks
     private TransferUseCaseImpl transferUseCase;
@@ -37,6 +46,7 @@ class TransferUseCaseImplTest {
         // Arrange
         UUID payerId = UUID.randomUUID();
         UUID payeeId = UUID.randomUUID();
+        UUID transferId = UUID.randomUUID();
         BigDecimal amount = BigDecimal.valueOf(100.00);
 
         Wallet payer = new Wallet(payerId, "Payer", "111", "payer@mail.com", "pass", BigDecimal.valueOf(200.00));
@@ -44,15 +54,19 @@ class TransferUseCaseImplTest {
 
         when(walletRepositoryPort.findById(payerId)).thenReturn(Optional.of(payer));
         when(walletRepositoryPort.findById(payeeId)).thenReturn(Optional.of(payee));
+        when(authorizerPort.authorize(any(), any())).thenReturn(true);
+        when(transferRepositoryPort.exists(any())).thenReturn(false);
+        when(transferRepositoryPort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        TransferCommand command = new TransferCommand(payerId, payeeId, amount);
 
-        // Act
+        TransferCommand command = new TransferCommand(transferId, payerId, payeeId, amount);
+
         transferUseCase.performTransfer(command);
 
         // Assert
         verify(walletRepositoryPort).save(payer);
         verify(walletRepositoryPort).save(payee);
+        verify(transferRepositoryPort).save(any());
     }
 
     @Test
@@ -60,7 +74,9 @@ class TransferUseCaseImplTest {
     void shouldFailWhenPayerNotFound() {
         // Arrange
         UUID payerId = UUID.randomUUID();
-        TransferCommand command = new TransferCommand(payerId, UUID.randomUUID(), BigDecimal.TEN);
+        UUID transferId = UUID.randomUUID();
+        UUID payeeId = UUID.randomUUID();
+        TransferCommand command = new TransferCommand(transferId, payerId, payeeId, BigDecimal.TEN);
 
         // Act
         when(walletRepositoryPort.findById(payerId)).thenReturn(Optional.empty());
