@@ -21,6 +21,7 @@ public class TransferController {
     @PostMapping
     public ResponseEntity<Void> performTransfer(@RequestBody @Valid TransferRequestDto requestDto) {
         TransferCommand command = new TransferCommand(
+                requestDto.id(),
                 requestDto.payerId(),
                 requestDto.payeeId(),
                 requestDto.amount()
