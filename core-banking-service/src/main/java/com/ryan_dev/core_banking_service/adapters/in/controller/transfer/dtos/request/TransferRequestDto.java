@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 public record TransferRequestDto(
+        @NotNull(message = "id cannot be null")
+        UUID id,
         @NotNull(message = "payerId cannot be null")
         UUID payerId,
         @NotNull(message = "payeeId cannot be null")
