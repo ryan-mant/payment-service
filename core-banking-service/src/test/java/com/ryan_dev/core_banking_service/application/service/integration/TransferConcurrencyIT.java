@@ -3,7 +3,9 @@ package com.ryan_dev.core_banking_service.application.service.integration;
 import com.ryan_dev.core_banking_service.application.domain.Wallet;
 import com.ryan_dev.core_banking_service.application.ports.in.transfer.TransferUseCase;
 import com.ryan_dev.core_banking_service.application.ports.in.transfer.commands.TransferCommand;
+import com.ryan_dev.core_banking_service.application.ports.out.AuthorizerPort;
 import com.ryan_dev.core_banking_service.application.ports.out.WalletRepositoryPort;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -12,16 +14,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
@@ -31,6 +37,9 @@ class TransferConcurrencyIT {
     @ServiceConnection
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
 
+    @MockitoBean
+    private AuthorizerPort authorizerPort;
+
     @Autowired
     private TransferUseCase transferUseCase;
 
@@ -38,6 +47,11 @@ class TransferConcurrencyIT {
     private WalletRepositoryPort walletRepositoryPort;
 
     private final Logger logger = LoggerFactory.getLogger(TransferConcurrencyIT.class);
+
+    @BeforeEach
+    void setup() {
+        when(authorizerPort.authorize(any(), any())).thenReturn(true);
+    }
 
     @Test
     @DisplayName("Should prevent double spending when concurrent transfers occur")
@@ -56,8 +70,8 @@ class TransferConcurrencyIT {
         payee1 = walletRepositoryPort.save(payee1);
         payee2 = walletRepositoryPort.save(payee2);
 
-        TransferCommand tx1 = new TransferCommand(payer.getId(), payee1.getId(), transferAmount);
-        TransferCommand tx2 = new TransferCommand(payer.getId(), payee2.getId(), transferAmount);
+        TransferCommand tx1 = new TransferCommand(UUID.randomUUID(), payer.getId(), payee1.getId(), transferAmount);
+        TransferCommand tx2 = new TransferCommand(UUID.randomUUID(), payer.getId(), payee2.getId(), transferAmount);
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger optimismLockExceptionCount = new AtomicInteger(0);
