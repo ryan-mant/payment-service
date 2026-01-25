@@ -1,0 +1,54 @@
+spring:
+  threads:
+    virtual:
+      enabled: true
+  application:
+    name: core-banking-service
+  datasource:
+    url: jdbc:postgresql://localhost:5444/db_core_banking
+    username: ${POSTGRES_USER:admin}
+    password: ${POSTGRES_PASSWORD:password}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+app:
+  client:
+    authorizer:
+#      url: "http://localhost:9999/fake-authorizer" esse aqui é só pra testar os graficos do circuit breaker no grafana
+      url: "http://localhost:8080/fake-authorizer"
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      authorizer:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
