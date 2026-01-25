@@ -1,43 +1,23 @@
 # 🛡️ Resilient Payment Gateway
 
-> **Status:** 🚧 Em Desenvolvimento (Fase 4 Completa)
-> **Arquitetura:** Hexagonal (Ports & Adapters) & Microsserviços
-> **Foco:** Alta Concorrência, Resiliência, Consistência de Dados, Processamento Assíncrono e Observabilidade.
+> **Status:** ✅ Concluído (Fase 5)
+> **Arquitetura:** Microsserviços Event-Driven
+> **Foco:** Alta Concorrência, Resiliência, Observabilidade e Otimização de Recursos (AWS Free Tier).
 
 ---
 
-## 🎯 Sobre o Projeto
-Este projeto é uma prova de conceito (PoC) de um **Gateway de Pagamentos** robusto, projetado para processar transferências financeiras simulando desafios reais de grandes instituições bancárias.
+## 🎯 Contexto do Projeto
+Este é um sistema de Core Banking distribuído, desenvolvido para processar transações financeiras com alta disponibilidade e observabilidade, rodando sob restrições severas de recursos (AWS Free Tier - 1GB RAM).
 
-O objetivo principal não é apenas realizar o CRUD de transferências, mas garantir:
-1.  **Integridade Transacional:** Evitar gastos duplos (Double Spending) em cenários de alta concorrência.
-2.  **Resiliência:** Proteger o Core Banking de falhas em serviços externos (Fail Fast).
-3.  **Desacoplamento:** Arquitetura limpa para facilitar testes e manutenção.
-4.  **Assincronismo:** Processamento de notificações desacoplado via mensageria.
-5.  **Visibilidade:** Monitoramento em tempo real da saúde da aplicação e métricas de negócio.
+O objetivo principal é manter o código limpo, garantir a cobertura de testes e manter a eficiência de recursos para que o deploy na nuvem permaneça estável.
 
 ---
 
-## 🛠️ Tech Stack
+## 🏗️ Arquitetura
+O sistema segue uma arquitetura de **Microsserviços Event-Driven**:
 
-* **Linguagem:** Java 21 (Records, Pattern Matching).
-* **Framework:** Spring Boot 3.
-* **Banco de Dados:** PostgreSQL 15.
-* **Mensageria:** RabbitMQ (Producer & Consumer).
-* **Resiliência:** Resilience4j (Circuit Breaker).
-* **Comunicação:** Spring Cloud OpenFeign.
-* **Observabilidade:** Prometheus & Grafana.
-* **Testes:** JUnit 5, Mockito, Testcontainers (Postgres), WireMock.
-* **Infraestrutura:** Docker & Docker Compose.
-
----
-
-## 🏗️ Arquitetura e Design Patterns
-
-O projeto segue estritamente a **Arquitetura Hexagonal (Ports & Adapters)**. O sistema foi dividido em dois microsserviços principais:
-
-1.  **Core Banking Service:** Responsável pelo domínio financeiro (Carteiras, Transferências, Validações).
-2.  **Notification Service:** Responsável pelo envio de notificações transacionais de forma assíncrona.
+1.  **Core Banking Service (Producer):** Responsável por gestão de carteiras (Wallets), usuários e execução da transação. Realiza chamadas síncronas para um "Autorizador Externo" (mock) e publica eventos de transação no RabbitMQ.
+2.  **Notification Service (Consumer):** Consome eventos de transação concluída e simula o envio de notificações (e-mail/SMS) de forma assíncrona.
 
 ```mermaid
 graph TD
@@ -82,38 +62,52 @@ graph TD
     Grafana -- Query --> Prometheus
 ```
 
+---
+
+## 🛠️ Tech Stack
+
+*   **Language:** Java 21
+*   **Framework:** Spring Boot 3 (Web, Data JPA, Validation, Actuator)
+*   **Database:** PostgreSQL 15 (Instância única com databases segregados: `db_core_banking` e `db_notification`).
+*   **Messaging:** RabbitMQ (Exchange: `transaction-exchange`, Queue: `notification-queue`).
+*   **Resilience:** Resilience4j (Circuit Breaker implementado na comunicação com o Autorizador Externo).
+*   **Observability:** Prometheus (coleta de métricas JVM e Micrometer) e Grafana (Dashboards).
+
+---
+
+## ☁️ Infraestrutura & DevOps (Critical Constraints)
+
+*   **Environment:** AWS EC2 t2.micro (1 vCPU, 1GB RAM).
+*   **Containerization:** Docker & Docker Compose.
+*   **Optimization:** Devido à baixa memória, todos os serviços Java rodam com a flag `JAVA_TOOL_OPTIONS="-Xms128m -Xmx300m"` para evitar OOM Kills. As imagens Docker utilizam base Alpine para serem mais leves.
+*   **Security:** Credenciais de banco e broker são injetadas via variáveis de ambiente (`.env`).
+
+---
+
+## 🔄 Fluxo de Transação (Caminho Feliz)
+
+1.  API recebe `POST /transfer`.
+2.  Valida saldo da carteira de origem.
+3.  Chama Autorizador Externo (protegido por Circuit Breaker).
+4.  Persiste a transação no Postgres (Atomicidade).
+5.  Publica evento `TransactionSuccessEvent` no RabbitMQ.
+6.  Notification Service consome o evento e loga o envio.
+
+---
+
 ## 💡 Decisões Técnicas Chave (Deep Dive)
 
 ### 1. Controle de Concorrência (Optimistic Locking)
 Para evitar o problema de **Lost Update** (duas transações debitando a mesma carteira simultaneamente), utilizei a estratégia de **Optimistic Locking** com JPA (`@Version`).
 
-* **Como funciona:** Cada atualização verifica se a versão do registro no banco é a mesma que foi lida. Se houver divergência (outra thread alterou o dado), uma `ObjectOptimisticLockingFailureException` é lançada e tratada.
-* **Validação:** Comprovado via Testes de Integração utilizando `CompletableFuture` e `CountDownLatch` para simular threads concorrentes.
-
 ### 2. Resiliência com Circuit Breaker (Fail Fast)
-Antes de efetivar uma transferência, o sistema consulta um **Autorizador Externo**.
-
-* **Problema:** Se o serviço externo cair, threads podem travar aguardando timeout, causando *Cascading Failure* no banco de dados.
-* **Solução:** Implementação do **Resilience4j**. Se a taxa de erros ultrapassar 50%, o circuito abre e o sistema falha imediatamente (Fail Fast), protegendo o Core.
+Antes de efetivar uma transferência, o sistema consulta um **Autorizador Externo**. Se a taxa de erros ultrapassar 50%, o circuito abre e o sistema falha imediatamente (Fail Fast), protegendo o Core.
 
 ### 3. Processamento Assíncrono e Idempotência
-Após a confirmação da transferência, um evento é publicado no **RabbitMQ**. O **Notification Service** consome este evento para notificar as partes envolvidas.
-
-* **Idempotência:** O consumidor verifica se a notificação já foi processada para o ID da transação (Chave de Idempotência), garantindo que mensagens duplicadas não gerem envios duplicados.
-* **Desacoplamento:** Falhas no envio de notificação não revertem a transferência financeira.
+O **Notification Service** consome eventos do RabbitMQ. O consumidor verifica se a notificação já foi processada para o ID da transação (Chave de Idempotência), garantindo que mensagens duplicadas não gerem envios duplicados.
 
 ### 4. Observabilidade Centralizada
-Para garantir a operação em produção, foi adicionada uma camada de monitoramento.
-
-* **Prometheus:** Coleta métricas expostas pelo Spring Boot Actuator (Micrometer) via endpoint `/actuator/prometheus`.
-* **Grafana:** Consome os dados do Prometheus para exibir dashboards de performance (JVM, CPU, Latência HTTP) e métricas de negócio (Transações por segundo).
-
-### 5. Tratamento de Erros (RFC 7807)
-A API implementa o padrão **Problem Details for HTTP APIs (RFC 7807)** nativo do Spring Boot 3.
-
-* **Erros de Negócio** -> `422 Unprocessable Entity` (com código interno de erro para o frontend).
-* **Erros de Validação** -> `400 Bad Request` (com lista detalhada de campos inválidos).
-* **Erros Inesperados** -> `500 Internal Server Error` (Log seguro no server, mensagem genérica para o cliente).
+**Prometheus** coleta métricas expostas pelo Spring Boot Actuator e o **Grafana** exibe dashboards de performance (JVM, CPU, Latência HTTP) e métricas de negócio.
 
 ---
 
@@ -133,37 +127,46 @@ A qualidade é garantida através da Pirâmide de Testes, cobrindo **>83%** do c
 
 ## 🚀 Como Rodar Localmente
 
-### Pré-requisitos
-* Java 21
-* Docker & Docker Compose
-* Maven
+1.  **Configurar Variáveis de Ambiente:**
+    ```bash
+    cp .env.example .env
+    ```
 
-### Passo a Passo
-
-1.  **Subir a Infraestrutura (Banco, RabbitMQ, Prometheus, Grafana):**
+2.  **Subir a Infraestrutura:**
     ```bash
     docker-compose up -d
     ```
 
-2.  **Executar o Core Banking Service:**
+3.  **Executar os Serviços:**
     ```bash
-    cd core-banking-service
-    ./mvnw spring-boot:run
-    ```
-
-3.  **Executar o Notification Service:**
-    ```bash
-    cd notification-service
-    ./mvnw spring-boot:run
+    # Terminal 1
+    cd core-banking-service && ./mvnw spring-boot:run
+    
+    # Terminal 2
+    cd notification-service && ./mvnw spring-boot:run
     ```
 
 4.  **Acessar Dashboards:**
-    *   **Grafana:** http://localhost:3000 (Login padrão: `admin` / `admin`)
+    *   **Grafana:** http://localhost:3000 
     *   **Prometheus:** http://localhost:9090
 
 ---
 
-## 🚧 Próximos Passos (Roadmap)
+## ☁️ Como Rodar em Produção (Docker)
+
+Para ambientes de produção (como EC2), utilize o arquivo `docker-compose-prod.yml`.
+
+1.  **Configurar Variáveis de Ambiente no Servidor:**
+    Crie o arquivo `.env` no servidor com as senhas seguras de produção.
+
+2.  **Subir a Stack Completa:**
+    ```bash
+    docker-compose -f docker-compose-prod.yml up -d
+    ```
+
+---
+
+## ✅ Roadmap Concluído
 
 - [x] Implementar Core Banking (Débito/Crédito).
 - [x] Implementar Optimistic Locking (Concorrência).
@@ -173,7 +176,8 @@ A qualidade é garantida através da Pirâmide de Testes, cobrindo **>83%** do c
 - [x] Implementar Idempotência (Chave única por transação).
 - [x] Aumentar cobertura de testes para >80%.
 - [x] Adicionar Observabilidade (Prometheus + Grafana).
-- [ ] Implementar em uma infraestrutura na núvem.
+- [x] Otimização para Cloud (Docker Alpine, JVM Tuning).
+- [x] Deploy em Infraestrutura Cloud (AWS EC2).
 
 ---
 
