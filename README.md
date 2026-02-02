@@ -1,5 +1,11 @@
 # 🛡️ Resilient Payment Gateway
 
+![Java](https://img.shields.io/badge/Java-21-orange)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2-green)
+![Build Status](https://github.com/ryan-mant/payment-service/actions/workflows/ci-cd.yml/badge.svg)
+![Coverage](https://img.shields.io/badge/Coverage-83%25-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-blue)
+
 > **Status:** ✅ Concluído (Fase 5)
 > **Arquitetura:** Microsserviços Event-Driven
 > **Foco:** Alta Concorrência, Resiliência, Observabilidade e Otimização de Recursos (AWS Free Tier).
