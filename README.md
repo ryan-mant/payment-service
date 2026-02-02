@@ -78,12 +78,16 @@ graph TD
 *   **Messaging:** RabbitMQ (Exchange: `transaction-exchange`, Queue: `notification-queue`).
 *   **Resilience:** Resilience4j (Circuit Breaker implementado na comunicação com o Autorizador Externo).
 *   **Observability:** Prometheus (coleta de métricas JVM e Micrometer) e Grafana (Dashboards).
+*   **Testing:** JUnit 5, Mockito e **Testcontainers** (Integração real com Postgres e RabbitMQ).
 
 ---
 
 ## ☁️ Infraestrutura & DevOps (Critical Constraints)
 
 *   **Environment:** AWS EC2 t2.micro (1 vCPU, 1GB RAM).
+*   **CI/CD:** Pipeline automatizado via **GitHub Actions**.
+    *   **CI:** Build e Testes de Integração com Testcontainers a cada push.
+    *   **CD:** Build de imagens Docker e Push automático para o Docker Hub na branch `main`.
 *   **Containerization:** Docker & Docker Compose.
 *   **Optimization:** Devido à baixa memória, todos os serviços Java rodam com a flag `JAVA_TOOL_OPTIONS="-Xms128m -Xmx300m"` para evitar OOM Kills. As imagens Docker utilizam base Alpine para serem mais leves.
 *   **Security:** Credenciais de banco e broker são injetadas via variáveis de ambiente (`.env`).
@@ -184,6 +188,7 @@ Para ambientes de produção (como EC2), utilize o arquivo `docker-compose-prod.
 - [x] Adicionar Observabilidade (Prometheus + Grafana).
 - [x] Otimização para Cloud (Docker Alpine, JVM Tuning).
 - [x] Deploy em Infraestrutura Cloud (AWS EC2).
+- [x] Pipeline CI/CD (GitHub Actions + Testcontainers).
 
 ---
 
