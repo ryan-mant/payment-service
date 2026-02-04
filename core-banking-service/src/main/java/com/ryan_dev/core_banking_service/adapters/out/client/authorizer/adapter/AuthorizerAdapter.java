@@ -35,7 +35,7 @@ public class AuthorizerAdapter implements AuthorizerPort {
             return "AUTHORIZED".equalsIgnoreCase(response.status());
 
         } catch (Exception e) {
-            logger.error("Erro ao chamar autorizador externo", e);
+            logger.error("Error calling external authorizer", e);
             throw e;
         }
     }
