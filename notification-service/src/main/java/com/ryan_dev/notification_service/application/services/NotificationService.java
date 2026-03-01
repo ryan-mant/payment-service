@@ -23,10 +23,6 @@ public class NotificationService implements ProcessNotificationUseCase {
 
     @Override
     public void processNotification(UUID transactionId, String payerEmail, String payeeEmail, BigDecimal amount) {
-        if (notificationRepositoryPort.existsByTransactionId(transactionId)) {
-            log.info("Notification already processed for transaction ID: {}", transactionId);
-            return;
-        }
 
         log.info("Sending notification to payer: {}", payerEmail);
         log.info("Sending notification to payee: {}", payeeEmail);
