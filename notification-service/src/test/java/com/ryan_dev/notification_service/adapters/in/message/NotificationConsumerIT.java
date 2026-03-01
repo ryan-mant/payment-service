@@ -1,5 +1,6 @@
 package com.ryan_dev.notification_service.adapters.in.message;
 
+import com.rabbitmq.client.Channel;
 import com.ryan_dev.notification_service.adapters.in.message.dto.TransferEvent;
 import com.ryan_dev.notification_service.application.ports.in.ProcessNotificationUseCase;
 import org.junit.jupiter.api.DisplayName;
@@ -14,9 +15,11 @@ import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest
@@ -40,7 +43,7 @@ class NotificationConsumerIT {
 
     @Test
     @DisplayName("Given a valid event, When receive is called, Then should invoke use case")
-    void shouldExecuteReceiveMethod() {
+    void shouldExecuteReceiveMethod() throws IOException {
         // Given
         TransferEvent event = new TransferEvent(
                 UUID.randomUUID(),
@@ -48,9 +51,11 @@ class NotificationConsumerIT {
                 "it@test.com",
                 BigDecimal.valueOf(100)
         );
+        Channel channel = mock(Channel.class);
+        long deliveryTag = 1L;
 
         // When
-        notificationConsumer.receive(event);
+        notificationConsumer.receive(event, channel, deliveryTag);
 
         // Then
         verify(processNotificationUseCase).processNotification(
@@ -59,5 +64,6 @@ class NotificationConsumerIT {
                 event.payeeEmail(),
                 event.amount()
         );
+        verify(channel).basicAck(deliveryTag, false);
     }
 }
