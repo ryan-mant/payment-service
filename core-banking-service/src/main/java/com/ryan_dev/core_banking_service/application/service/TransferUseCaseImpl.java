@@ -8,12 +8,12 @@ import com.ryan_dev.core_banking_service.application.domain.exceptions.TransferA
 import com.ryan_dev.core_banking_service.application.ports.in.transfer.commands.TransferCommand;
 import com.ryan_dev.core_banking_service.application.ports.in.transfer.TransferUseCase;
 import com.ryan_dev.core_banking_service.application.ports.out.AuthorizerPort;
-import com.ryan_dev.core_banking_service.application.ports.out.SendNotificationPort;
 import com.ryan_dev.core_banking_service.application.ports.out.TransferRepositoryPort;
 import com.ryan_dev.core_banking_service.application.ports.out.WalletRepositoryPort;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -24,15 +24,15 @@ public class TransferUseCaseImpl implements TransferUseCase {
     private final WalletRepositoryPort walletRepositoryPort;
     private final TransferRepositoryPort transferRepositoryPort;
     private final AuthorizerPort authorizerPort;
-    private final SendNotificationPort sendNotificationPort;
+    private final ApplicationEventPublisher eventPublisher;
     private static final Logger logger = LoggerFactory.getLogger(TransferUseCaseImpl.class);
 
 
-    public TransferUseCaseImpl(WalletRepositoryPort walletRepositoryPort, TransferRepositoryPort transferRepositoryPort, AuthorizerPort authorizerPort, SendNotificationPort sendNotificationPort) {
+    public TransferUseCaseImpl(WalletRepositoryPort walletRepositoryPort, TransferRepositoryPort transferRepositoryPort, AuthorizerPort authorizerPort, ApplicationEventPublisher eventPublisher) {
         this.walletRepositoryPort = walletRepositoryPort;
         this.transferRepositoryPort = transferRepositoryPort;
         this.authorizerPort = authorizerPort;
-        this.sendNotificationPort = sendNotificationPort;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -73,6 +73,6 @@ public class TransferUseCaseImpl implements TransferUseCase {
                 command.amount()
 
         );
-        sendNotificationPort.send(event);
+        eventPublisher.publishEvent(event);
     }
 }
