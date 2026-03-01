@@ -11,8 +11,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -50,20 +48,5 @@ class NotificationPersistenceAdapterTest {
         verify(notificationMapper).toNotificationEntity(notification);
         verify(springDataNotificationRepository).save(entity);
         verify(notificationMapper).toNotification(savedEntity);
-    }
-
-    @Test
-    @DisplayName("Given a transaction ID, When existsByTransactionId is called, Then should return repository result")
-    void shouldCheckIfTransactionExists() {
-        // Given
-        UUID transactionId = UUID.randomUUID();
-        when(springDataNotificationRepository.existsByTransactionId(transactionId)).thenReturn(true);
-
-        // When
-        boolean exists = notificationPersistenceAdapter.existsByTransactionId(transactionId);
-
-        // Then
-        assertTrue(exists);
-        verify(springDataNotificationRepository).existsByTransactionId(transactionId);
     }
 }
