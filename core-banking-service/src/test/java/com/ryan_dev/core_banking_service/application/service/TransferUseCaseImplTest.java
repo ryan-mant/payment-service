@@ -1,9 +1,10 @@
 package com.ryan_dev.core_banking_service.application.service;
 
+import com.ryan_dev.core_banking_service.adapters.out.message.dto.TransferEvent;
+import com.ryan_dev.core_banking_service.application.domain.Transfer;
 import com.ryan_dev.core_banking_service.application.domain.Wallet;
 import com.ryan_dev.core_banking_service.application.ports.in.transfer.commands.TransferCommand;
 import com.ryan_dev.core_banking_service.application.ports.out.AuthorizerPort;
-import com.ryan_dev.core_banking_service.application.ports.out.SendNotificationPort;
 import com.ryan_dev.core_banking_service.application.ports.out.TransferRepositoryPort;
 import com.ryan_dev.core_banking_service.application.ports.out.WalletRepositoryPort;
 import org.junit.jupiter.api.DisplayName;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -33,9 +35,7 @@ class TransferUseCaseImplTest {
     private TransferRepositoryPort transferRepositoryPort;
 
     @Mock
-    private SendNotificationPort sendNotificationPort;
-
-
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private TransferUseCaseImpl transferUseCase;
@@ -51,12 +51,13 @@ class TransferUseCaseImplTest {
 
         Wallet payer = new Wallet(payerId, "Payer", "111", "payer@mail.com", "pass", BigDecimal.valueOf(200.00));
         Wallet payee = new Wallet(payeeId, "Payee", "222", "payee@mail.com", "pass", BigDecimal.valueOf(50.00));
+        Transfer transfer = new Transfer(transferId, payer, payee, amount);
 
         when(walletRepositoryPort.findById(payerId)).thenReturn(Optional.of(payer));
         when(walletRepositoryPort.findById(payeeId)).thenReturn(Optional.of(payee));
         when(authorizerPort.authorize(any(), any())).thenReturn(true);
         when(transferRepositoryPort.exists(any())).thenReturn(false);
-        when(transferRepositoryPort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transferRepositoryPort.save(any())).thenReturn(transfer);
 
 
         TransferCommand command = new TransferCommand(transferId, payerId, payeeId, amount);
@@ -67,6 +68,7 @@ class TransferUseCaseImplTest {
         verify(walletRepositoryPort).save(payer);
         verify(walletRepositoryPort).save(payee);
         verify(transferRepositoryPort).save(any());
+        verify(eventPublisher).publishEvent(any(TransferEvent.class));
     }
 
     @Test
@@ -79,6 +81,7 @@ class TransferUseCaseImplTest {
         TransferCommand command = new TransferCommand(transferId, payerId, payeeId, BigDecimal.TEN);
 
         // Act
+        when(transferRepositoryPort.exists(any())).thenReturn(false);
         when(walletRepositoryPort.findById(payerId)).thenReturn(Optional.empty());
 
         // Assert
