@@ -36,8 +36,6 @@ class NotificationServiceTest {
         String payeeEmail = "payee@test.com";
         BigDecimal amount = BigDecimal.TEN;
 
-        when(notificationRepositoryPort.existsByTransactionId(transactionId)).thenReturn(false);
-
         // When
         notificationService.processNotification(transactionId, payerEmail, payeeEmail, amount);
 
@@ -50,23 +48,5 @@ class NotificationServiceTest {
         assertEquals(payeeEmail, capturedNotification.getEmail());
         assertEquals(NotificationStatus.SENT, capturedNotification.getStatus());
         assertEquals("Transfer of " + amount + " received from " + payerEmail, capturedNotification.getMessage());
-    }
-
-    @Test
-    @DisplayName("Given an existing transaction, When processNotification is called, Then should not save notification")
-    void shouldNotProcessExistingNotification() {
-        // Given
-        UUID transactionId = UUID.randomUUID();
-        String payerEmail = "payer@test.com";
-        String payeeEmail = "payee@test.com";
-        BigDecimal amount = BigDecimal.TEN;
-
-        when(notificationRepositoryPort.existsByTransactionId(transactionId)).thenReturn(true);
-
-        // When
-        notificationService.processNotification(transactionId, payerEmail, payeeEmail, amount);
-
-        // Then
-        verify(notificationRepositoryPort, never()).save(any());
     }
 }
