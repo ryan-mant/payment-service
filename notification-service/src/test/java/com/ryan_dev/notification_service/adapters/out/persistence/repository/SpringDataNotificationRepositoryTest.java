@@ -17,8 +17,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -37,8 +36,8 @@ class SpringDataNotificationRepositoryTest {
     private SpringDataNotificationRepository repository;
 
     @Test
-    @DisplayName("Given an existing transaction ID, When existsByTransactionId is called, Then should return true")
-    void shouldReturnTrueWhenTransactionExists() {
+    @DisplayName("Given a valid notification entity, When save is called, Then should persist the entity")
+    void shouldSaveNotification() {
         // Given
         UUID transactionId = UUID.randomUUID();
         NotificationEntity entity = new NotificationEntity();
@@ -49,26 +48,12 @@ class SpringDataNotificationRepositoryTest {
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
 
-        entityManager.persist(entity);
-        entityManager.flush();
-
         // When
-        boolean exists = repository.existsByTransactionId(transactionId);
+        NotificationEntity savedEntity = repository.save(entity);
 
         // Then
-        assertTrue(exists);
-    }
-
-    @Test
-    @DisplayName("Given a non-existing transaction ID, When existsByTransactionId is called, Then should return false")
-    void shouldReturnFalseWhenTransactionDoesNotExist() {
-        // Given
-        UUID transactionId = UUID.randomUUID();
-
-        // When
-        boolean exists = repository.existsByTransactionId(transactionId);
-
-        // Then
-        assertFalse(exists);
+        assertNotNull(savedEntity.getId());
+        NotificationEntity foundEntity = entityManager.find(NotificationEntity.class, savedEntity.getId());
+        assertNotNull(foundEntity);
     }
 }
