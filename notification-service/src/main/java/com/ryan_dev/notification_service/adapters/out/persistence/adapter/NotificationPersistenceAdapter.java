@@ -8,8 +8,6 @@ import com.ryan_dev.notification_service.application.ports.out.NotificationRepos
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import java.util.UUID;
-
 @Repository
 @RequiredArgsConstructor
 public class NotificationPersistenceAdapter implements NotificationRepositoryPort {
@@ -23,10 +21,5 @@ public class NotificationPersistenceAdapter implements NotificationRepositoryPor
         NotificationEntity entity = notificationMapper.toNotificationEntity(notification);
         NotificationEntity savedEntity = springDataNotificationRepository.save(entity);
         return notificationMapper.toNotification(savedEntity);
-    }
-
-    @Override
-    public boolean existsByTransactionId(UUID transactionId) {
-        return springDataNotificationRepository.existsByTransactionId(transactionId);
     }
 }
