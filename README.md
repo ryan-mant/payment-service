@@ -91,6 +91,7 @@ graph TD
     *   **CI:** Build e Testes de Integração com Testcontainers a cada push.
     *   **CD:** Build de imagens Docker e Push automático para o Docker Hub na branch `main`.
 *   **Containerization:** Docker & Docker Compose.
+*   **IaC:** Terraform com LocalStack para simulação de ambiente AWS e Backend Remoto (S3).
 *   **Optimization:** Devido à baixa memória, todos os serviços Java rodam com a flag `JAVA_TOOL_OPTIONS="-Xms128m -Xmx300m"` para evitar OOM Kills. As imagens Docker utilizam base Alpine para serem mais leves.
 *   **Security:** Credenciais de banco e broker são injetadas via variáveis de ambiente (`.env`).
 
@@ -185,6 +186,54 @@ Para ambientes de produção (como EC2), utilize o arquivo `docker-compose-prod.
 
 ---
 
+## 🏗️ Infraestrutura como Código (Terraform + LocalStack)
+
+Este projeto utiliza **Terraform** para gerenciar a infraestrutura como código (IaC), permitindo a criação de um ambiente AWS simulado localmente com **LocalStack**. Isso garante que o desenvolvimento da infraestrutura seja rápido, gratuito e consistente.
+
+### Pré-requisitos
+1.  **Docker e Docker Compose:** Essenciais para rodar o ambiente local.
+2.  **Terraform:** [Instale o Terraform](https://learn.hashicorp.com/tutorials/terraform/install-cli) para sua plataforma.
+
+### Como Usar
+
+1.  **Subir o Ambiente Local (Incluindo LocalStack e AWS CLI):**
+    Na raiz do projeto, use o arquivo `docker-compose-local.yml` para iniciar os serviços.
+    ```bash
+    docker-compose -f docker-compose-local.yml up -d
+    ```
+
+2.  **Criar o Backend Remoto:**
+    Antes de inicializar o Terraform, é necessário criar o bucket S3 e a tabela DynamoDB no LocalStack para armazenar o estado de forma segura. Execute o script no container do aws-cli:
+    ```bash
+    docker-compose -f docker-compose-local.yml exec aws-cli sh /scripts/create-backend.sh
+    ```
+
+3.  **Inicializar o Terraform:**
+    Navegue até a pasta `infra` e execute `init` para que o Terraform baixe os plugins necessários e configure o backend S3.
+    ```bash
+    cd infra
+    terraform init
+    ```
+
+4.  **Planejar e Aplicar a Infraestrutura:**
+    Use `plan` para ver o que será criado e `apply` para executar a criação dos recursos (VPC, EC2, etc.) no LocalStack.
+    ```bash
+    # Veja o que será criado (opcional, mas recomendado)
+    terraform plan
+
+    # Aplique a configuração e digite "yes" para confirmar
+    terraform apply
+    ```
+    Ao final, o Terraform terá "criado" a infraestrutura AWS no seu ambiente Docker e o script `setup.sh` terá sido configurado para rodar na EC2 simulada.
+
+5.  **Destruir a Infraestrutura (Opcional):**
+    Para remover todos os recursos criados pelo Terraform no LocalStack:
+    ```bash
+    terraform destroy
+    ```
+
+---
+
 ## 📊 Resultados de Testes de Carga (k6)
 
 Adicionei um script `test-carga.js` para validar a capacidade da aplicação. Abaixo estão os resultados comparativos:
@@ -225,7 +274,7 @@ TOTAL RESULTS
     checks_failed......: 89.97% 40831 out of 45379
 
     ✗ transacao aprovada
-      ↳  10% — ✓ 4548 / ✗ 40831
+      ↳  10% — ✓ 4548 / 40831
 
     HTTP
     http_req_duration..............: avg=132.27ms min=4.03ms med=129.13ms max=630.06ms p(90)=150.47ms p(95)=180.61ms
@@ -251,6 +300,8 @@ TOTAL RESULTS
 - [x] Otimização para Cloud (Docker Alpine, JVM Tuning).
 - [x] Deploy em Infraestrutura Cloud (AWS EC2).
 - [x] Pipeline CI/CD (GitHub Actions + Testcontainers).
+- [x] **Infraestrutura como Código com Terraform e LocalStack.**
+- [x] **Configuração de Backend Remoto (S3) para o Terraform.**
 
 ---
 
