@@ -31,9 +31,31 @@ jobs:
       - name: List files in Notification target (Debug)
         run: ls -R notification-service/target
 
+  terraform-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+
+      - name: Terraform Init
+        working-directory: ./infra
+        run: terraform init -backend=false
+        
+      - name: Terraform Format
+        working-directory: ./infra
+        run: terraform fmt -check
+        
+      - name: Terraform Validate
+        working-directory: ./infra
+        run: terraform validate
+
   deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, terraform-validate]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
