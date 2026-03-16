@@ -196,16 +196,16 @@ Este projeto utiliza **Terraform** para gerenciar a infraestrutura como código 
 
 ### Como Usar
 
-1.  **Subir o Ambiente Local (Incluindo LocalStack e AWS CLI):**
-    Na raiz do projeto, use o arquivo `docker-compose-local.yml` para iniciar os serviços.
+1.  **Subir o Ambiente Local:**
+    Na raiz do projeto, use o arquivo `docker-compose.yml` para iniciar todos os serviços, incluindo banco de dados, mensageria e o LocalStack.
     ```bash
-    docker-compose -f docker-compose-local.yml up -d
+    docker-compose up -d
     ```
 
 2.  **Criar o Backend Remoto:**
     Antes de inicializar o Terraform, é necessário criar o bucket S3 e a tabela DynamoDB no LocalStack para armazenar o estado de forma segura. Execute o script no container do aws-cli:
     ```bash
-    docker-compose -f docker-compose-local.yml exec aws-cli sh /scripts/create-backend.sh
+    docker-compose exec aws-cli sh /scripts/create-backend.sh
     ```
 
 3.  **Inicializar o Terraform:**

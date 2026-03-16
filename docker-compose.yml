@@ -48,6 +48,38 @@ services:
     networks:
       - payment-network
 
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack_aws
+    ports:
+      - "4566:4566"            # AWS APIs
+      - "4510:4510"            # Web Dashboard
+    environment:
+      - SERVICES=ec2,iam,s3,dynamodb
+      - DEBUG=1
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - payment-network
+
+  aws-cli:
+    image: amazon/aws-cli:latest
+    container_name: aws_cli
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["tail -f /dev/null"]
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - ./infra:/scripts
+    networks:
+      - payment-network
+
 networks:
   payment-network:
     driver: bridge
+
+volumes:
+  localstack_data:
