@@ -36,8 +36,7 @@ graph TD
         InputPort[Transfer UseCase]
         Domain[Wallet Domain Entity]
         Service[Transfer Service]
-        Producer[RabbitMQ Producer]
-        Listener[Transactional Event Listener]
+        OutboxScheduler[Outbox Scheduler]
     end
 
     subgraph "Notification Service (Hexagon)"
@@ -58,9 +57,9 @@ graph TD
     Service --> Domain
     Service --> DB
     Service -- Circuit Breaker --> Auth
-    Service -- Publish Event --> Listener
-    Listener -- Async Event (After Commit) --> Producer
-    Producer --> Queue
+    Service -- Save Outbox --> DB
+    OutboxScheduler -- Fetch Pending --> DB
+    OutboxScheduler -- Publish Event --> Queue
     Queue --> Consumer
     Consumer --> NotifService
     NotifService --> NotifDB
@@ -111,21 +110,24 @@ graph TD
 ## 💡 Decisões Técnicas Chave (Deep Dive)
 
 ### 1. Controle de Concorrência (Optimistic Locking)
-Para evitar o problema de **Lost Update** (duas transações debitando a mesma carteira simultaneamente), utilizei a estratégia de **Optimistic Locking** com JPA (`@Version`).
+Para evitar o problema de **Lost Update** (duas transações debitando a mesma carteira simultaneamente), o sistema usa a estratégia de **Optimistic Locking** com JPA (`@Version`).
 
 ### 2. Resiliência com Circuit Breaker (Fail Fast)
 Antes de efetivar uma transferência, o sistema consulta um **Autorizador Externo**. Se a taxa de erros ultrapassar 50%, o circuito abre e o sistema falha imediatamente (Fail Fast), protegendo o Core.
 
-### 3. Consistência Eventual e Transactional Outbox (Simulado)
-Utilizei `@TransactionalEventListener(phase = AFTER_COMMIT)` para garantir que eventos só sejam enviados ao RabbitMQ se a transação no banco de dados for confirmada. Isso evita inconsistências onde uma mensagem é enviada mas a transação falha (rollback).
+### 3. Consistência Eventual com Transactional Outbox
+Para garantir a entrega *At-Least-Once* de eventos sem perdas, salvamos os dados do evento na tabela `outbox_event` sob a mesma transação da transferência. Um worker agendado (`OutboxScheduler`) lê os eventos pendentes e os publica de forma assíncrona no RabbitMQ, removendo-os da tabela após a confirmação.
 
-### 4. Confiabilidade no Consumo (Manual ACK)
-O **Notification Service** utiliza `AcknowledgeMode.MANUAL`. A mensagem só é removida da fila após o processamento completo e bem-sucedido. Em caso de erro, a mensagem retorna para a fila (NACK com requeue) ou vai para uma Dead Letter Queue (DLQ), garantindo **At-Least-Once Delivery**.
+### 4. Confiabilidade no Consumo (Manual ACK e DLQ)
+O **Notification Service** utiliza `AcknowledgeMode.MANUAL`. Se o processamento de uma notificação falhar por problemas persistentes (como e-mail inválido ou falhas de dados), a aplicação envia um `basicNack` com `requeue=false`, e o RabbitMQ direciona a mensagem para uma **Dead Letter Queue (DLQ)**, evitando o travamento da fila principal com mensagens inválidas (Poison Pills).
 
 ### 5. Idempotência
 O consumidor verifica se a notificação já foi processada para o ID da transação (Chave de Idempotência), garantindo que mensagens duplicadas (comuns em sistemas distribuídos) não gerem envios duplicados.
 
-### 6. Observabilidade Centralizada
+### 6. Network I/O Fora de Transações
+A chamada externa de rede ao Autorizador foi movida para fora do bloco transacional. O sistema utiliza `TransactionTemplate` para abrir transações curtas no banco apenas no momento de atualizar os saldos e salvar o outbox, evitando o travamento do pool de conexões (HikariCP).
+
+### 7. Observabilidade Centralizada
 **Prometheus** coleta métricas expostas pelo Spring Boot Actuator e o **Grafana** exibe dashboards de performance (JVM, CPU, Latência HTTP) e métricas de negócio.
 
 ---
@@ -236,52 +238,34 @@ Este projeto utiliza **Terraform** para gerenciar a infraestrutura como código 
 
 ## 📊 Resultados de Testes de Carga (k6)
 
-Adicionei um script `test-carga.js` para validar a capacidade da aplicação. Abaixo estão os resultados comparativos:
+O script `teste-carga.js` executa um cenário de 200 usuários virtuais concorrentes (VUs) durante 30 segundos, distribuindo as transações em um pool de 50 pagadores e 50 recebedores com saldos de R$ 10.000.000,00 cada. Isso simula o comportamento de produção distribuído e evita gargalos artificiais no banco de dados.
 
-### 1. Com Limites de Memória (Produção)
-Configuração: `-Xms128m -Xmx300m`
-*   **Throughput:** ~1430 req/s
-*   **Latência Média:** 139.13ms
-*   **P95:** 183.43ms
+### Resultados sob Limites de Memória (JVM limitadas a 300MB)
 
-```text
-TOTAL RESULTS 
-
-    checks_total.......: 43117  1430.986548/s
-    checks_succeeded...: 10.02% 4324 out of 43117
-    checks_failed......: 89.97% 38793 out of 43117
-
-    ✗ transacao aprovada
-      ↳  10% — ✓ 4324 / ✗ 38793
-
-    HTTP
-    http_req_duration..............: avg=139.13ms min=3.97ms med=134.21ms max=1.07s p(90)=158.59ms p(95)=183.43ms
-      { expected_response:true }...: avg=140.74ms min=6.4ms  med=134.97ms max=1.07s p(90)=155.84ms p(95)=163.04ms
-    http_req_failed................: 89.97% 38793 out of 43117
-    http_reqs......................: 43117  1430.986548/s
-```
-
-### 2. Sem Limites de Memória
-*   **Throughput:** ~1506 req/s
-*   **Latência Média:** 132.27ms
-*   **P95:** 180.61ms
+*   **Vazão Bruta (Throughput):** `1.561 req/s`
+*   **Taxa de Sucesso (Transações Aprovadas):** **`78.29%`** (`36.817` transações concluídas)
+*   **Vazão Útil de Negócio:** **`1.227` transações concluídas por segundo**
+*   **Latência Média:** `127.63ms`
+*   **P95:** `187.66ms`
 
 ```text
 TOTAL RESULTS 
 
-    checks_total.......: 45379  1506.785574/s
-    checks_succeeded...: 10.02% 4548 out of 45379
-    checks_failed......: 89.97% 40831 out of 45379
+    checks_total.......: 47024  1561.44605/s
+    checks_succeeded...: 78.29% 36817 out of 47024
+    checks_failed......: 21.70% 10207 out of 47024
 
     ✗ transacao aprovada
-      ↳  10% — ✓ 4548 / 40831
+      ↳  78% — ✓ 36817 / ✗ 10207
 
     HTTP
-    http_req_duration..............: avg=132.27ms min=4.03ms med=129.13ms max=630.06ms p(90)=150.47ms p(95)=180.61ms
-      { expected_response:true }...: avg=133.34ms min=4.93ms med=129.85ms max=384.29ms p(90)=147.32ms p(95)=155.99ms
-    http_req_failed................: 89.97% 40831 out of 45379
-    http_reqs......................: 45379  1506.785574/s
+    http_req_duration..............: avg=127.63ms min=1.79ms med=115.54ms max=1.17s p(90)=165.63ms p(95)=187.66ms
+      { expected_response:true }...: avg=128.18ms min=3.52ms med=115.71ms max=1.17s p(90)=166.19ms p(95)=188.32ms
+    http_req_failed................: 21.70% 10207 out of 47024
+    http_reqs......................: 47024  1561.44605/s
 ```
+
+*Nota: Os 21.70% de requisições rejeitadas são decorrentes de conflitos de concorrência (`Optimistic Locking`) na atualização de saldo das mesmas carteiras no Postgres (HTTP 409). Esse comportamento é esperado e garante a consistência do saldo sob carga intensa concorrente de 200 VUs em 50 contas.*
 
 ---
 
