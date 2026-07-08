@@ -84,7 +84,7 @@ class NotificationConsumerTest {
     }
 
     @Test
-    @DisplayName("Given an event, When processing fails, Then should NACK and requeue")
+    @DisplayName("Given an event, When processing fails, Then should NACK and route to DLQ (requeue=false)")
     void shouldNackAndRequeueWhenProcessingFails() throws IOException {
         // Given
         TransferEvent event = new TransferEvent(
@@ -109,6 +109,6 @@ class NotificationConsumerTest {
                 event.payeeEmail(),
                 event.amount()
         );
-        verify(channel).basicNack(deliveryTag, false, true);
+        verify(channel).basicNack(deliveryTag, false, false);
     }
 }

@@ -42,8 +42,8 @@ public class NotificationConsumer {
             channel.basicAck(tag, false);
 
         } catch (Exception e) {
-            log.error("Error processing notification for transaction ID: {}. Requeuing...", event.transactionId(), e);
-            channel.basicNack(tag, false, true);
+            log.error("Error processing notification for transaction ID: {}. Routing to DLQ...", event.transactionId(), e);
+            channel.basicNack(tag, false, false);
         }
     }
 }

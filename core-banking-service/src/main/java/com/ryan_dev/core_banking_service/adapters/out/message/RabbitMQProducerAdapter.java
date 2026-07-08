@@ -24,6 +24,7 @@ public class RabbitMQProducerAdapter implements SendNotificationPort {
             logger.info("Sent message to RabbitMQ queue");
         } catch (Exception e) {
             logger.error("Error sending message to RabbitMQ queue", e);
+            throw e; // Rethrow to let callers know of the failure
         }
     }
 }
