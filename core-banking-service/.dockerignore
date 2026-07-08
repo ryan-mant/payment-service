@@ -1,3 +1,7 @@
-*
-!target/
-!Dockerfile
+target/
+.idea/
+.mvn/
+mvnw
+mvnw.cmd
+.gitignore
+.gitattributes

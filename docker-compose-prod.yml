@@ -24,6 +24,7 @@ services:
       - payment-network
 
   core-banking:
+    build: ./core-banking-service
     image: ryanrsdev/core-banking-service:latest
     container_name: core-banking
     ports:
@@ -43,6 +44,7 @@ services:
       - payment-network
 
   notification-service:
+    build: ./notification-service
     image: ryanrsdev/notification-service:latest
     container_name: notification-service
     environment:
