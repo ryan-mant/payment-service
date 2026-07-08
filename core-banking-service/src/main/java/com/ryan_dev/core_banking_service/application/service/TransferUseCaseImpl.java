@@ -10,12 +10,18 @@ import com.ryan_dev.core_banking_service.application.ports.in.transfer.TransferU
 import com.ryan_dev.core_banking_service.application.ports.out.AuthorizerPort;
 import com.ryan_dev.core_banking_service.application.ports.out.TransferRepositoryPort;
 import com.ryan_dev.core_banking_service.application.ports.out.WalletRepositoryPort;
-import jakarta.transaction.Transactional;
+import com.ryan_dev.core_banking_service.application.domain.exceptions.InsufficientBalanceException;
+import com.ryan_dev.core_banking_service.application.domain.OutboxEvent;
+import com.ryan_dev.core_banking_service.application.ports.out.OutboxRepositoryPort;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -25,18 +31,29 @@ public class TransferUseCaseImpl implements TransferUseCase {
     private final TransferRepositoryPort transferRepositoryPort;
     private final AuthorizerPort authorizerPort;
     private final ApplicationEventPublisher eventPublisher;
+    private final TransactionTemplate transactionTemplate;
+    private final OutboxRepositoryPort outboxRepositoryPort;
+    private final ObjectMapper objectMapper;
     private static final Logger logger = LoggerFactory.getLogger(TransferUseCaseImpl.class);
 
 
-    public TransferUseCaseImpl(WalletRepositoryPort walletRepositoryPort, TransferRepositoryPort transferRepositoryPort, AuthorizerPort authorizerPort, ApplicationEventPublisher eventPublisher) {
+    public TransferUseCaseImpl(WalletRepositoryPort walletRepositoryPort,
+                               TransferRepositoryPort transferRepositoryPort,
+                               AuthorizerPort authorizerPort,
+                               ApplicationEventPublisher eventPublisher,
+                               TransactionTemplate transactionTemplate,
+                               OutboxRepositoryPort outboxRepositoryPort,
+                               ObjectMapper objectMapper) {
         this.walletRepositoryPort = walletRepositoryPort;
         this.transferRepositoryPort = transferRepositoryPort;
         this.authorizerPort = authorizerPort;
         this.eventPublisher = eventPublisher;
+        this.transactionTemplate = transactionTemplate;
+        this.outboxRepositoryPort = outboxRepositoryPort;
+        this.objectMapper = objectMapper;
     }
 
     @Override
-    @Transactional
     public void performTransfer(TransferCommand command) {
 
         if (transferRepositoryPort.exists(command.id())) {
@@ -50,6 +67,9 @@ public class TransferUseCaseImpl implements TransferUseCase {
         Wallet payee = walletRepositoryPort.findById(command.payeeId())
                 .orElseThrow(() -> new RuntimeException("Payee not found"));
 
+        if (payer.getBalance().compareTo(command.amount()) < 0) {
+            throw new InsufficientBalanceException("INSUFFICIENT_FUNDS", "Insufficient funds to complete the transaction.");
+        }
 
         boolean authorized = authorizerPort.authorize(payer, command.amount());
 
@@ -57,22 +77,48 @@ public class TransferUseCaseImpl implements TransferUseCase {
             throw new BusinessException("TRANSFER_REJECTED", "Transfer rejected by the authorizer.");
         }
 
-        payer.debit(command.amount());
-        payee.credit(command.amount());
+        transactionTemplate.executeWithoutResult(status -> {
+            Wallet dbPayer = walletRepositoryPort.findById(command.payerId())
+                    .orElseThrow(() -> new RuntimeException("Payer not found"));
 
-        walletRepositoryPort.save(payer);
-        walletRepositoryPort.save(payee);
+            Wallet dbPayee = walletRepositoryPort.findById(command.payeeId())
+                    .orElseThrow(() -> new RuntimeException("Payee not found"));
 
-        Transfer transfer = new Transfer(command.id(), payer, payee, command.amount());
-        UUID savedTransferId = transferRepositoryPort.save(transfer).getId();
+            dbPayer.debit(command.amount());
+            dbPayee.credit(command.amount());
 
-        TransferEvent event = new TransferEvent(
-                savedTransferId,
-                payer.getEmail(),
-                payee.getEmail(),
-                command.amount()
+            walletRepositoryPort.save(dbPayer);
+            walletRepositoryPort.save(dbPayee);
 
-        );
-        eventPublisher.publishEvent(event);
+            Transfer transfer = new Transfer(command.id(), dbPayer, dbPayee, command.amount());
+            UUID savedTransferId = transferRepositoryPort.save(transfer).getId();
+
+            TransferEvent event = new TransferEvent(
+                    savedTransferId,
+                    dbPayer.getEmail(),
+                    dbPayee.getEmail(),
+                    command.amount()
+            );
+
+            // Grava o evento na tabela de Outbox para garantir entrega confiável
+            try {
+                String payload = objectMapper.writeValueAsString(event);
+                OutboxEvent outboxEvent = new OutboxEvent(
+                        savedTransferId, // ID do evento do outbox igual ao ID da transação
+                        "Transfer",
+                        savedTransferId,
+                        "TransferCreated",
+                        payload,
+                        "PENDING",
+                        LocalDateTime.now()
+                );
+                outboxRepositoryPort.save(outboxEvent);
+            } catch (JsonProcessingException e) {
+                logger.error("Error serializing transfer event for outbox", e);
+                throw new RuntimeException("Failed to serialize outbox event", e);
+            }
+
+            eventPublisher.publishEvent(event);
+        });
     }
 }

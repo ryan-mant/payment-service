@@ -7,6 +7,7 @@ import com.ryan_dev.core_banking_service.application.ports.in.transfer.commands.
 import com.ryan_dev.core_banking_service.application.ports.out.AuthorizerPort;
 import com.ryan_dev.core_banking_service.application.ports.out.TransferRepositoryPort;
 import com.ryan_dev.core_banking_service.application.ports.out.WalletRepositoryPort;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,10 +15,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.ryan_dev.core_banking_service.application.ports.out.OutboxRepositoryPort;
 
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
@@ -37,8 +44,28 @@ class TransferUseCaseImplTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
+    @Mock
+    private OutboxRepositoryPort outboxRepositoryPort;
+
+    @Mock
+    private ObjectMapper objectMapper;
+
     @InjectMocks
     private TransferUseCaseImpl transferUseCase;
+
+    @BeforeEach
+    void setUp() throws JsonProcessingException {
+        lenient().doAnswer(invocation -> {
+            Consumer<TransactionStatus> callback = invocation.getArgument(0);
+            callback.accept(mock(TransactionStatus.class));
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+
+        lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+    }
 
     @Test
     @DisplayName("Should perform transfer successfully")
