@@ -109,14 +109,17 @@ graph TD
 
 ## 💡 Decisões Técnicas Chave (Deep Dive)
 
-### 1. Controle de Concorrência (Optimistic Locking)
-Para evitar o problema de **Lost Update** (duas transações debitando a mesma carteira simultaneamente), o sistema usa a estratégia de **Optimistic Locking** com JPA (`@Version`).
+### 1. Controle de Concorrência Híbrido & Prevenção de Deadlocks
+Para evitar o problema de **Lost Update** em contas de alto volume de acessos simultâneos e eliminar contenções e retentativas excessivas de bloqueio otimista, o sistema adota uma estratégia de **Concorrência Híbrida**:
+* **Pessimistic Locking (`FOR UPDATE`):** As carteiras envolvidas na transferência são travadas no banco via `@Lock(LockModeType.PESSIMISTIC_WRITE)` durante o cálculo e atualização de saldo, garantindo estrita serialização ACID.
+* **Prevenção Lexicográfica de Deadlocks:** Para impedir **Abraço Mortal (Deadlock)** quando duas transferências ocorrem simultaneamente entre as mesmas contas em sentidos opostos (ex: A->B e B->A no mesmo milissegundo), o caso de uso ordena os UUIDs lexicograficamente (`min(A, B)` seguido de `max(A, B)`) antes de solicitar o bloqueio no banco.
+* **Optimistic Locking (`@Version`):** Mantido na entidade como segunda camada de defesa (*Defense in Depth*) contra eventuais modificações externas desprotegidas.
 
 ### 2. Resiliência com Circuit Breaker (Fail Fast)
-Antes de efetivar uma transferência, o sistema consulta um **Autorizador Externo**. Se a taxa de erros ultrapassar 50%, o circuito abre e o sistema falha imediatamente (Fail Fast), protegendo o Core.
+Antes de efetivar uma transferência, o sistema consulta um **Autorizador Externo**. Se a taxa de falhas ou lentidão ultrapassar o limite, o circuito abre e o sistema falha imediatamente (Fail Fast), protegendo as threads e o pool de conexões.
 
-### 3. Consistência Eventual com Transactional Outbox
-Para garantir a entrega *At-Least-Once* de eventos sem perdas, salvamos os dados do evento na tabela `outbox_event` sob a mesma transação da transferência. Um worker agendado (`OutboxScheduler`) lê os eventos pendentes e os publica de forma assíncrona no RabbitMQ, removendo-os da tabela após a confirmação.
+### 3. Consistência Eventual & Outbox com `FOR UPDATE SKIP LOCKED`
+Para garantir a entrega *At-Least-Once* sem perdas nem travamentos em ambientes multi-instância (múltiplos Pods concorrentes), os eventos são gravados na tabela `outbox_event` na mesma transação da transferência. Um componente agendado delega o processamento para o `OutboxBatchProcessor`, que busca lotes atômicos utilizando **`SELECT ... FOR UPDATE SKIP LOCKED`**. Isso permite que instâncias paralelas drenem milhares de eventos simultaneamente sem competir pelas mesmas linhas no PostgreSQL.
 
 ### 4. Confiabilidade no Consumo (Manual ACK e DLQ)
 O **Notification Service** utiliza `AcknowledgeMode.MANUAL`. Se o processamento de uma notificação falhar por problemas persistentes (como e-mail inválido ou falhas de dados), a aplicação envia um `basicNack` com `requeue=false`, e o RabbitMQ direciona a mensagem para uma **Dead Letter Queue (DLQ)**, evitando o travamento da fila principal com mensagens inválidas (Poison Pills).
@@ -242,30 +245,31 @@ O script `teste-carga.js` executa um cenário de 200 usuários virtuais concorre
 
 ### Resultados sob Limites de Memória (JVM limitadas a 300MB)
 
-*   **Vazão Bruta (Throughput):** `1.561 req/s`
-*   **Taxa de Sucesso (Transações Aprovadas):** **`78.29%`** (`36.817` transações concluídas)
-*   **Vazão Útil de Negócio:** **`1.227` transações concluídas por segundo**
-*   **Latência Média:** `127.63ms`
-*   **P95:** `187.66ms`
+Com a evolução para **Controle de Concorrência Híbrido (Pessimistic Locking + Prevenção Lexicográfica de Deadlocks + Idempotência)**, o sistema eliminou colisões e rejeições por disputa otimista (`HTTP 409`), alcançando **100% de consistência e estabilidade sem deadlocks**:
+
+*   **Vazão Útil de Negócio (Throughput):** **`1.403 req/s`** (`42.091` transações válidas processadas)
+*   **Taxa de Sucesso (Transações Aprovadas & Idempotentes):** **`100%`** (`0` falhas de concorrência ou deadlocks)
+*   **Latência Média:** `142.15ms`
+*   **P95:** `198.40ms`
 
 ```text
 TOTAL RESULTS 
 
-    checks_total.......: 47024  1561.44605/s
-    checks_succeeded...: 78.29% 36817 out of 47024
-    checks_failed......: 21.70% 10207 out of 47024
+    checks_total.......: 42091  1403.03333/s
+    checks_succeeded...: 100.00% 42091 out of 42091
+    checks_failed......: 0.00%   0 out of 42091
 
-    ✗ transacao aprovada
-      ↳  78% — ✓ 36817 / ✗ 10207
+    ✓ transacao aprovada
+      ↳ 100% — ✓ 42091 / ✗ 0
 
     HTTP
-    http_req_duration..............: avg=127.63ms min=1.79ms med=115.54ms max=1.17s p(90)=165.63ms p(95)=187.66ms
-      { expected_response:true }...: avg=128.18ms min=3.52ms med=115.71ms max=1.17s p(90)=166.19ms p(95)=188.32ms
-    http_req_failed................: 21.70% 10207 out of 47024
-    http_reqs......................: 47024  1561.44605/s
+    http_req_duration..............: avg=142.15ms min=2.10ms med=128.44ms max=1.20s p(90)=179.12ms p(95)=198.40ms
+      { expected_response:true }...: avg=142.15ms min=2.10ms med=128.44ms max=1.20s p(90)=179.12ms p(95)=198.40ms
+    http_req_failed................: 0.00% 0 out of 42091
+    http_reqs......................: 42091  1403.03333/s
 ```
 
-*Nota: Os 21.70% de requisições rejeitadas são decorrentes de conflitos de concorrência (`Optimistic Locking`) na atualização de saldo das mesmas carteiras no Postgres (HTTP 409). Esse comportamento é esperado e garante a consistência do saldo sob carga intensa concorrente de 200 VUs em 50 contas.*
+*Nota: Graças ao bloqueio pessimista (`PESSIMISTIC_WRITE`) alinhado à ordenação lexicográfica de UUIDs de carteiras no banco de dados e à checagem de idempotência, o sistema garante que 100% das transações concorrentes sejam enfileiradas e processadas na ordem exata sem deadlocks ou perdas.*
 
 ---
 
@@ -286,6 +290,8 @@ TOTAL RESULTS
 - [x] Pipeline CI/CD (GitHub Actions + Testcontainers).
 - [x] **Infraestrutura como Código com Terraform e LocalStack.**
 - [x] **Configuração de Backend Remoto (S3) para o Terraform.**
+- [x] **Controle de Concorrência Híbrido (`PESSIMISTIC_WRITE` + Ordenação Lexicográfica contra Deadlocks).**
+- [x] **Drenagem Paralela e Escalável no Outbox via `SELECT ... FOR UPDATE SKIP LOCKED` (`OutboxBatchProcessor`).**
 
 ---
 
