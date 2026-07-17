@@ -80,8 +80,8 @@ class TransferUseCaseImplTest {
         Wallet payee = new Wallet(payeeId, "Payee", "222", "payee@mail.com", "pass", BigDecimal.valueOf(50.00));
         Transfer transfer = new Transfer(transferId, payer, payee, amount);
 
-        when(walletRepositoryPort.findById(payerId)).thenReturn(Optional.of(payer));
-        when(walletRepositoryPort.findById(payeeId)).thenReturn(Optional.of(payee));
+        when(walletRepositoryPort.findByIdWithLock(payerId)).thenReturn(Optional.of(payer));
+        when(walletRepositoryPort.findByIdWithLock(payeeId)).thenReturn(Optional.of(payee));
         when(authorizerPort.authorize(any(), any())).thenReturn(true);
         when(transferRepositoryPort.exists(any())).thenReturn(false);
         when(transferRepositoryPort.save(any())).thenReturn(transfer);
@@ -102,14 +102,14 @@ class TransferUseCaseImplTest {
     @DisplayName("Should fail when payer not found")
     void shouldFailWhenPayerNotFound() {
         // Arrange
-        UUID payerId = UUID.randomUUID();
+        UUID payerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID payeeId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         UUID transferId = UUID.randomUUID();
-        UUID payeeId = UUID.randomUUID();
         TransferCommand command = new TransferCommand(transferId, payerId, payeeId, BigDecimal.TEN);
 
         // Act
         when(transferRepositoryPort.exists(any())).thenReturn(false);
-        when(walletRepositoryPort.findById(payerId)).thenReturn(Optional.empty());
+        when(walletRepositoryPort.findByIdWithLock(payerId)).thenReturn(Optional.empty());
 
         // Assert
         assertThatThrownBy(() -> transferUseCase.performTransfer(command))
