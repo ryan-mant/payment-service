@@ -27,7 +27,6 @@ public class OutboxEvent {
         this.createdAt = createdAt;
     }
 
-    // Getters and Setters
     public UUID getId() {
         return id;
     }
