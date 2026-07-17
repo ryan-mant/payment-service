@@ -2,6 +2,16 @@ spring:
   threads:
     virtual:
       enabled: true
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 500
+            readTimeout: 1000
+          authorizer-client:
+            connectTimeout: 300
+            readTimeout: 800
   application:
     name: core-banking-service
   datasource:
@@ -31,13 +41,21 @@ resilience4j:
     instances:
       authorizer:
         registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
         waitDurationInOpenState: 5s
         failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 700ms
         eventConsumerBufferSize: 10
+  timelimiter:
+    instances:
+      authorizer:
+        timeoutDuration: 850ms
+        cancelRunningFuture: true
 
 management:
   endpoints:
