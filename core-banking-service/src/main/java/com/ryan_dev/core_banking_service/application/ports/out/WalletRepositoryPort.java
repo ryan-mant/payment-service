@@ -10,6 +10,8 @@ public interface WalletRepositoryPort {
 
     Optional<Wallet> findById(UUID id);
 
+    Optional<Wallet> findByIdWithLock(UUID id);
+
     Optional<Wallet> findByCpfCnpj(String cpfCnpj);
 
     Wallet save(Wallet wallet);
