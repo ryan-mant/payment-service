@@ -29,7 +29,6 @@ public class ExceptionHandlerAdvice {
         );
 
         problemDetail.setTitle("Validation Exception");
-//        problemDetail.setType(URI.create("https://github.com/ryan-mant/payment-service")); IMPLEMENTAR UM LINK COM DOC
         problemDetail.setProperty("timestamp", Instant.now());
 
         List<InvalidParam> invalidParams = ex.getBindingResult().getFieldErrors().stream()
@@ -51,7 +50,6 @@ public class ExceptionHandlerAdvice {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
 
         problemDetail.setTitle("Business Exception");
-//        problemDetail.setType(URI.create("https://github.com/ryan-mant/payment-service")); IMPLEMENTAR UM LINK COM DOC
         problemDetail.setProperty("timestamp", Instant.now());
 
         problemDetail.setProperty("internal_code", e.getCode());
@@ -70,7 +68,6 @@ public class ExceptionHandlerAdvice {
         );
 
         problemDetail.setTitle("Unexpected Exception");
-//        problemDetail.setType(URI.create("https://github.com/ryan-mant/payment-service")); IMPLEMENTAR UM LINK COM DOC
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
     }
@@ -82,7 +79,6 @@ public class ExceptionHandlerAdvice {
         );
 
         problemDetail.setTitle("Version Conflict Exception");
-//        problemDetail.setType(URI.create("https://github.com/ryan-mant/payment-service")); IMPLEMENTAR UM LINK COM DOC
         problemDetail.setProperty("timestamp", Instant.now());
 
         return problemDetail;
@@ -96,7 +92,6 @@ public class ExceptionHandlerAdvice {
         );
 
         problemDetail.setTitle("Transfer Already Exists Exception");
-//        problemDetail.setType(URI.create("https://github.com/ryan-mant/payment-service")); IMPLEMENTAR UM LINK COM DOC
         problemDetail.setProperty("timestamp", Instant.now());
         problemDetail.setProperty("internal_code", ex.getCode());
 
