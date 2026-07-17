@@ -7,5 +7,6 @@ import java.util.UUID;
 public interface OutboxRepositoryPort {
     void save(OutboxEvent event);
     List<OutboxEvent> findPendingEvents();
+    List<OutboxEvent> findPendingEventsBatch(int limit);
     void delete(UUID id);
 }
