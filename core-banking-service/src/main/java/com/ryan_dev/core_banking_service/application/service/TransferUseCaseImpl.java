@@ -61,28 +61,26 @@ public class TransferUseCaseImpl implements TransferUseCase {
             throw new TransferAlreadyExistsException("TRANSFER_ALREADY_EXISTS", "Transfer already exists.");
         }
 
-        Wallet payer = walletRepositoryPort.findById(command.payerId())
-                .orElseThrow(() -> new RuntimeException("Payer not found"));
-
-        Wallet payee = walletRepositoryPort.findById(command.payeeId())
-                .orElseThrow(() -> new RuntimeException("Payee not found"));
-
-        if (payer.getBalance().compareTo(command.amount()) < 0) {
-            throw new InsufficientBalanceException("INSUFFICIENT_FUNDS", "Insufficient funds to complete the transaction.");
-        }
-
-        boolean authorized = authorizerPort.authorize(payer, command.amount());
-
-        if (!authorized) {
-            throw new BusinessException("TRANSFER_REJECTED", "Transfer rejected by the authorizer.");
-        }
+        UUID firstId = command.payerId().compareTo(command.payeeId()) < 0 ? command.payerId() : command.payeeId();
+        UUID secondId = command.payerId().compareTo(command.payeeId()) < 0 ? command.payeeId() : command.payerId();
 
         transactionTemplate.executeWithoutResult(status -> {
-            Wallet dbPayer = walletRepositoryPort.findById(command.payerId())
-                    .orElseThrow(() -> new RuntimeException("Payer not found"));
+            Wallet dbFirst = walletRepositoryPort.findByIdWithLock(firstId)
+                    .orElseThrow(() -> new RuntimeException(firstId.equals(command.payerId()) ? "Payer not found" : "Payee not found"));
+            Wallet dbSecond = walletRepositoryPort.findByIdWithLock(secondId)
+                    .orElseThrow(() -> new RuntimeException(secondId.equals(command.payerId()) ? "Payer not found" : "Payee not found"));
 
-            Wallet dbPayee = walletRepositoryPort.findById(command.payeeId())
-                    .orElseThrow(() -> new RuntimeException("Payee not found"));
+            Wallet dbPayer = dbFirst.getId().equals(command.payerId()) ? dbFirst : dbSecond;
+            Wallet dbPayee = dbFirst.getId().equals(command.payeeId()) ? dbFirst : dbSecond;
+
+            if (dbPayer.getBalance().compareTo(command.amount()) < 0) {
+                throw new InsufficientBalanceException("INSUFFICIENT_FUNDS", "Insufficient funds to complete the transaction.");
+            }
+
+            boolean authorized = authorizerPort.authorize(dbPayer, command.amount());
+            if (!authorized) {
+                throw new BusinessException("TRANSFER_REJECTED", "Transfer rejected by the authorizer.");
+            }
 
             dbPayer.debit(command.amount());
             dbPayee.credit(command.amount());
@@ -100,11 +98,10 @@ public class TransferUseCaseImpl implements TransferUseCase {
                     command.amount()
             );
 
-            // Grava o evento na tabela de Outbox para garantir entrega confiável
             try {
                 String payload = objectMapper.writeValueAsString(event);
                 OutboxEvent outboxEvent = new OutboxEvent(
-                        savedTransferId, // ID do evento do outbox igual ao ID da transação
+                        savedTransferId,
                         "Transfer",
                         savedTransferId,
                         "TransferCreated",
