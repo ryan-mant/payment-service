@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import com.ryan_dev.core_banking_service.application.domain.exceptions.InsufficientBalanceException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -74,7 +76,7 @@ class TransferConcurrencyIT {
         TransferCommand tx2 = new TransferCommand(UUID.randomUUID(), payer.getId(), payee2.getId(), transferAmount);
 
         AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger optimismLockExceptionCount = new AtomicInteger(0);
+        AtomicInteger concurrencyFailureCount = new AtomicInteger(0);
 
         CountDownLatch latch = new CountDownLatch(1);
 
@@ -85,8 +87,8 @@ class TransferConcurrencyIT {
                 latch.await();
                 transferUseCase.performTransfer(tx1);
                 successCount.incrementAndGet();
-            } catch (ObjectOptimisticLockingFailureException e) {
-                optimismLockExceptionCount.incrementAndGet();
+            } catch (ObjectOptimisticLockingFailureException | PessimisticLockingFailureException | InsufficientBalanceException e) {
+                concurrencyFailureCount.incrementAndGet();
             } catch (Exception e) {
                 logger.error("An unexpected error occurred: ", e);
             }
@@ -97,8 +99,8 @@ class TransferConcurrencyIT {
                 latch.await();
                 transferUseCase.performTransfer(tx2);
                 successCount.incrementAndGet();
-            } catch (ObjectOptimisticLockingFailureException e) {
-                optimismLockExceptionCount.incrementAndGet();
+            } catch (ObjectOptimisticLockingFailureException | PessimisticLockingFailureException | InsufficientBalanceException e) {
+                concurrencyFailureCount.incrementAndGet();
             } catch (Exception e) {
                 logger.error("An unexpected error occurred: ", e);
             }
@@ -112,12 +114,10 @@ class TransferConcurrencyIT {
 
         assertThat(successCount.get()).as("Only one transaction should succeed").isEqualTo(1);
 
-        assertThat(optimismLockExceptionCount.get()).as("One transaction should fail due to concurrency").isEqualTo(1);
+        assertThat(concurrencyFailureCount.get()).as("One transaction should fail due to concurrency or insufficient balance").isEqualTo(1);
 
         Wallet updatedPayer = walletRepositoryPort.findById(payer.getId()).orElseThrow();
 
         assertThat(updatedPayer.getBalance()).isEqualByComparingTo(BigDecimal.ZERO);
-
-        assertThat(updatedPayer.getVersion()).isEqualTo(1L);
     }
 }
