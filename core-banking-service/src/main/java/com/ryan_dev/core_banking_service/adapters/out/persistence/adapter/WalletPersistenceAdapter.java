@@ -26,6 +26,12 @@ public class WalletPersistenceAdapter implements WalletRepositoryPort {
     }
 
     @Override
+    public Optional<Wallet> findByIdWithLock(UUID id) {
+        return dataWalletRepository.findByIdWithLock(id)
+                .map(mapper::toDomain);
+    }
+
+    @Override
     public Optional<Wallet> findByCpfCnpj(String cpfCnpj) {
         return dataWalletRepository.findByCpfCnpj(cpfCnpj)
                 .map(mapper::toDomain);
@@ -33,7 +39,15 @@ public class WalletPersistenceAdapter implements WalletRepositoryPort {
 
     @Override
     public Wallet save(Wallet wallet) {
-        WalletEntity entity = mapper.toEntity(wallet);
+        WalletEntity entity = null;
+        if (wallet.getId() != null) {
+            entity = dataWalletRepository.findById(wallet.getId()).orElse(null);
+        }
+        if (entity != null) {
+            mapper.updateEntityFromDomain(wallet, entity);
+        } else {
+            entity = mapper.toEntity(wallet);
+        }
         WalletEntity saved = dataWalletRepository.save(entity);
         return mapper.toDomain(saved);
     }
