@@ -36,6 +36,13 @@ public class OutboxPersistenceAdapter implements OutboxRepositoryPort {
     }
 
     @Override
+    public List<OutboxEvent> findPendingEventsBatch(int limit) {
+        return outboxRepository.findPendingEventsWithLockSkipLocked("PENDING", limit).stream()
+                .map(mapper::toDomain)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public void delete(UUID id) {
         outboxRepository.deleteById(id);
     }
