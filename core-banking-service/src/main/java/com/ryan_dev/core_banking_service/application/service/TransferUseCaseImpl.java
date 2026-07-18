@@ -61,8 +61,9 @@ public class TransferUseCaseImpl implements TransferUseCase {
             throw new TransferAlreadyExistsException("TRANSFER_ALREADY_EXISTS", "Transfer already exists.");
         }
 
-        UUID firstId = command.payerId().compareTo(command.payeeId()) < 0 ? command.payerId() : command.payeeId();
-        UUID secondId = command.payerId().compareTo(command.payeeId()) < 0 ? command.payeeId() : command.payerId();
+        boolean payerFirst = command.payerId().compareTo(command.payeeId()) < 0;
+        UUID firstId = payerFirst ? command.payerId() : command.payeeId();
+        UUID secondId = payerFirst ? command.payeeId() : command.payerId();
 
         transactionTemplate.executeWithoutResult(status -> {
             Wallet dbFirst = walletRepositoryPort.findByIdWithLock(firstId)
