@@ -17,7 +17,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -30,7 +29,6 @@ public class TransferUseCaseImpl implements TransferUseCase {
     private final WalletRepositoryPort walletRepositoryPort;
     private final TransferRepositoryPort transferRepositoryPort;
     private final AuthorizerPort authorizerPort;
-    private final ApplicationEventPublisher eventPublisher;
     private final TransactionTemplate transactionTemplate;
     private final OutboxRepositoryPort outboxRepositoryPort;
     private final ObjectMapper objectMapper;
@@ -40,14 +38,12 @@ public class TransferUseCaseImpl implements TransferUseCase {
     public TransferUseCaseImpl(WalletRepositoryPort walletRepositoryPort,
                                TransferRepositoryPort transferRepositoryPort,
                                AuthorizerPort authorizerPort,
-                               ApplicationEventPublisher eventPublisher,
                                TransactionTemplate transactionTemplate,
                                OutboxRepositoryPort outboxRepositoryPort,
                                ObjectMapper objectMapper) {
         this.walletRepositoryPort = walletRepositoryPort;
         this.transferRepositoryPort = transferRepositoryPort;
         this.authorizerPort = authorizerPort;
-        this.eventPublisher = eventPublisher;
         this.transactionTemplate = transactionTemplate;
         this.outboxRepositoryPort = outboxRepositoryPort;
         this.objectMapper = objectMapper;
@@ -115,8 +111,6 @@ public class TransferUseCaseImpl implements TransferUseCase {
                 logger.error("Error serializing transfer event for outbox", e);
                 throw new RuntimeException("Failed to serialize outbox event", e);
             }
-
-            eventPublisher.publishEvent(event);
         });
     }
 }
