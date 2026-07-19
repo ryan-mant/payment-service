@@ -14,7 +14,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,9 +39,6 @@ class TransferUseCaseImplTest {
 
     @Mock
     private TransferRepositoryPort transferRepositoryPort;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
 
     @Mock
     private TransactionTemplate transactionTemplate;
@@ -95,7 +91,6 @@ class TransferUseCaseImplTest {
         verify(walletRepositoryPort).save(payer);
         verify(walletRepositoryPort).save(payee);
         verify(transferRepositoryPort).save(any());
-        verify(eventPublisher).publishEvent(any(TransferEvent.class));
     }
 
     @Test
