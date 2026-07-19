@@ -99,11 +99,11 @@ graph TD
 ## 🔄 Fluxo de Transação (Caminho Feliz)
 
 1.  API recebe `POST /transfer`.
-2.  Valida saldo da carteira de origem.
+2.  Valida saldo da carteira de origem (com PESSIMISTIC_WRITE lock ativo).
 3.  Chama Autorizador Externo (protegido por Circuit Breaker).
-4.  Persiste a transação no Postgres (Atomicidade).
-5.  **Transactional Event Listener:** Após o commit bem-sucedido no banco, publica o evento `TransactionSuccessEvent` no RabbitMQ.
-6.  Notification Service consome o evento, processa e envia o **ACK manual** para o RabbitMQ.
+4.  Persiste a transação e o evento de outbox na mesma transação Postgres (Atomicidade e consistência).
+5.  **Outbox Batch Draining:** O worker assíncrono `OutboxScheduler` lê periodicamente lotes pendentes via `SKIP LOCKED` e publica-os no RabbitMQ.
+6.  Notification Service consome o evento, valida idempotência, processa e envia o **ACK manual** para o RabbitMQ.
 
 ---
 
@@ -281,7 +281,7 @@ TOTAL RESULTS
 - [x] Publicação de Eventos no RabbitMQ (Producer).
 - [x] Implementar Worker de Notificação (Consumer Assíncrono).
 - [x] Implementar Idempotência (Chave única por transação).
-- [x] Implementar Transactional Event Listener (Consistência).
+- [x] Implementar Transactional Outbox (Consistência e Confiabilidade).
 - [x] Implementar Manual ACK no Consumer (Confiabilidade).
 - [x] Aumentar cobertura de testes para >80%.
 - [x] Adicionar Observabilidade (Prometheus + Grafana).
